@@ -18,7 +18,7 @@ namespace Netch.Servers.VMess
         public string ShortName { get; } = "V2";
         public string[] UriScheme { get; } = {"vmess"};
 
-        public Server ParseJObject(JObject j)
+        public Server ParseJObject(in JObject j)
         {
             return j.ToObject<VMess>();
         }
@@ -49,7 +49,7 @@ namespace Netch.Servers.VMess
                 type = server.FakeType,
                 host = server.Host,
                 path = server.Path,
-                tls = server.TLSSecure ? "tls" : ""
+                tls = server.TLSSecureType
             });
             return "vmess://" + ShareLink.URLSafeBase64Encode(vmessJson);
         }
@@ -64,10 +64,10 @@ namespace Netch.Servers.VMess
             var data = new VMess();
 
             text = text.Substring(8);
-            VMessJObject vmess;
+            V2rayNSharing vmess;
             try
             {
-                vmess = JsonConvert.DeserializeObject<VMessJObject>(ShareLink.URLSafeBase64Decode(text));
+                vmess = JsonConvert.DeserializeObject<V2rayNSharing>(ShareLink.URLSafeBase64Decode(text));
             }
             catch (Exception e)
             {
@@ -97,7 +97,7 @@ namespace Netch.Servers.VMess
                 data.Path = vmess.path;
             }
 
-            data.TLSSecure = vmess.tls == "tls";
+            data.TLSSecureType = vmess.tls;
             data.EncryptMethod = "auto"; // V2Ray 加密方式不包括在链接中，主动添加一个
 
             return CheckServer(data) ? new[] {data} : null;

@@ -1,6 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Drawing;
-using System.Text;
+using System.Linq;
 using Netch.Models;
 using Netch.Utils;
 
@@ -35,10 +36,11 @@ namespace Netch.Forms
 
                     // 启动需要禁用的控件
                     UninstallServiceToolStripMenuItem.Enabled =
-                        updateACLWithProxyToolStripMenuItem.Enabled =
-                            UpdateServersFromSubscribeLinksToolStripMenuItem.Enabled =
-                                UninstallTapDriverToolStripMenuItem.Enabled =
-                                    ReloadModesToolStripMenuItem.Enabled = enabled;
+                        UpdateACLToolStripMenuItem.Enabled =
+                            updateACLWithProxyToolStripMenuItem.Enabled =
+                                UpdateServersFromSubscribeLinksToolStripMenuItem.Enabled =
+                                    UninstallTapDriverToolStripMenuItem.Enabled =
+                                        ReloadModesToolStripMenuItem.Enabled = enabled;
                 }
 
                 _state = value;
@@ -183,33 +185,48 @@ namespace Netch.Forms
 
         public static class StatusPortInfoText
         {
-            public static int Socks5Port = 0;
-            public static int HttpPort = 0;
-            public static bool ShareLan = false;
+            private static ushort? _socks5Port;
+            private static ushort? _httpPort;
+            private static bool _shareLan;
+
+            public static ushort HttpPort
+            {
+                set => _httpPort = value;
+            }
+
+            public static ushort Socks5Port
+            {
+                set => _socks5Port = value;
+            }
+
+            public static void UpdateShareLan() => _shareLan = Global.Settings.LocalAddress != "127.0.0.1";
 
             public static string Value
             {
                 get
                 {
-                    if (Socks5Port == 0 && HttpPort == 0)
-                        return string.Empty;
+                    var strings = new List<string>();
 
-                    var text = new StringBuilder();
-                    if (ShareLan)
-                        text.Append(i18N.Translate("Allow other Devices to connect") + " ");
-
-                    if (Socks5Port != 0)
-                        text.Append($"Socks5 {i18N.Translate("Local Port", ": ")}{Socks5Port}");
-
-                    if (HttpPort != 0)
+                    if (_socks5Port != null)
                     {
-                        if (Socks5Port != 0)
-                            text.Append(" | ");
-                        text.Append($"HTTP {i18N.Translate("Local Port", ": ")}{HttpPort}");
+                        strings.Add($"Socks5 {i18N.Translate("Local Port", ": ")}{_socks5Port}");
                     }
 
-                    return $" ({text})";
+                    if (_httpPort != null)
+                    {
+                        strings.Add($"HTTP {i18N.Translate("Local Port", ": ")}{_httpPort}");
+                    }
+
+                    if (!strings.Any())
+                        return string.Empty;
+
+                    return $" ({(_shareLan ? i18N.Translate("Allow other Devices to connect") + " " : "")}{string.Join(" | ", strings)})";
                 }
+            }
+
+            public static void Reset()
+            {
+                _httpPort = _socks5Port = null;
             }
         }
     }

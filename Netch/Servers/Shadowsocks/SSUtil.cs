@@ -21,7 +21,7 @@ namespace Netch.Servers.Shadowsocks
         public string ShortName { get; } = "SS";
         public string[] UriScheme { get; } = {"ss", "ssd"};
 
-        public Server ParseJObject(JObject j)
+        public Server ParseJObject(in JObject j)
         {
             return j.ToObject<Shadowsocks>();
         }
@@ -140,7 +140,7 @@ namespace Netch.Servers.Shadowsocks
                     if (!match.Success) throw new FormatException();
 
                     data.Hostname = match.Groups["server"].Value;
-                    data.Port = int.Parse(match.Groups["port"].Value);
+                    data.Port = ushort.Parse(match.Groups["port"].Value);
 
                     var base64 = ShareLink.URLSafeBase64Decode(match.Groups["base64"].Value);
                     match = parser.Match(base64);
@@ -156,7 +156,7 @@ namespace Netch.Servers.Shadowsocks
                     if (!match.Success) throw new FormatException();
 
                     data.Hostname = match.Groups["server"].Value;
-                    data.Port = int.Parse(match.Groups["port"].Value);
+                    data.Port = ushort.Parse(match.Groups["port"].Value);
                     data.EncryptMethod = match.Groups["method"].Value;
                     data.Password = match.Groups["password"].Value;
                 }

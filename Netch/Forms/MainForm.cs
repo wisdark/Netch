@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -63,10 +64,8 @@ namespace Netch.Forms
             // 隐藏 NatTypeStatusLabel
             NatTypeStatusText();
 
-            _sizeHeight = Size.Height;
             _configurationGroupBoxHeight = ConfigurationGroupBox.Height;
             _profileConfigurationHeight = ConfigurationGroupBox.Controls[0].Height / 3; // 因为 AutoSize, 所以得到的是Controls的总高度
-            _profileGroupboxHeight = ProfileGroupBox.Height;
             // 加载快速配置
             InitProfile();
 
@@ -283,6 +282,13 @@ namespace Netch.Forms
             }
 
             Configuration.Save();
+
+            foreach (var file in new[] {"data\\last.json", "data\\privoxy.conf"})
+            {
+                if (File.Exists(file))
+                    File.Delete(file);
+            }
+
             State = State.Terminating;
         }
 
@@ -466,7 +472,7 @@ namespace Netch.Forms
             Activate();
         }
 
-        private void NotifyTip(string text, int timeout = 0, bool info = true)
+        public void NotifyTip(string text, int timeout = 0, bool info = true)
         {
             // 会阻塞线程 timeout 秒
             NotifyIcon.ShowBalloonTip(timeout,

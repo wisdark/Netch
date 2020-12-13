@@ -1,35 +1,34 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Netch.Forms;
 
-namespace Netch.Servers.VMess.Form
+namespace Netch.Servers.VLESS.VLESSForm
 {
-    public class VMessForm : ServerForm
+    class VLESSForm : ServerForm
     {
-        protected override string TypeName { get; } = "VMess";
+        protected override string TypeName { get; } = "VLESS";
 
-        public VMessForm(VMess server = default)
+        public VLESSForm(VLESS server = default)
         {
-            server ??= new VMess();
+            server ??= new VLESS();
             Server = server;
-            CreateTextBox("UserId", "User ID",
+            CreateTextBox("UUID", "UUID",
                 s => true,
                 s => server.UserID = s,
                 server.UserID);
-            CreateTextBox("AlterId", "Alter ID",
-                s => int.TryParse(s, out _),
-                s => server.AlterID = int.Parse(s),
-                server.AlterID.ToString(),
-                76);
-            CreateComboBox("EncryptMethod", "Encrypt Method",
-                VMessGlobal.EncryptMethods,
-                s => server.EncryptMethod = s,
+            CreateTextBox("EncryptMethod", "Encrypt Method",
+                s => true,
+                s => server.EncryptMethod = !string.IsNullOrWhiteSpace(s) ? s : "none",
                 server.EncryptMethod);
+            CreateTextBox("Flow", "Flow",
+                s => true,
+                s => server.Flow = s,
+                server.Flow);
             CreateComboBox("TransferProtocol", "Transfer Protocol",
-                VMessGlobal.TransferProtocols,
+                VLESSGlobal.TransferProtocols,
                 s => server.TransferProtocol = s,
                 server.TransferProtocol);
             CreateComboBox("FakeType", "Fake Type",
-                VMessGlobal.FakeTypes,
+                VLESSGlobal.FakeTypes,
                 s => server.FakeType = s,
                 server.FakeType);
             CreateTextBox("Host", "Host",
@@ -40,14 +39,6 @@ namespace Netch.Servers.VMess.Form
                 s => true,
                 s => server.Path = s,
                 server.Path);
-            CreateComboBox("QUICSecurity", "QUIC Security",
-                VMessGlobal.QUIC,
-                s => server.QUIC = s,
-                server.QUIC);
-            CreateTextBox("QUICSecret", "QUIC Secret",
-                s => true,
-                s => server.QUICSecret = s,
-                server.QUICSecret);
             CreateComboBox("UseMux", "Use Mux",
                 new List<string> {"", "true", "false"},
                 s => server.UseMux = s switch
@@ -59,7 +50,7 @@ namespace Netch.Servers.VMess.Form
                 },
                 server.UseMux?.ToString().ToLower() ?? "");
             CreateComboBox("TLSSecure", "TLS Secure",
-                VMessGlobal.TLSSecure,
+                VLESSGlobal.TLSSecure,
                 s => server.TLSSecureType = s,
                 server.TLSSecureType);
         }

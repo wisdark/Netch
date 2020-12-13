@@ -15,7 +15,7 @@ namespace Netch.Servers.Socks5
         public string ShortName { get; } = "S5";
         public string[] UriScheme { get; } = { };
 
-        public Server ParseJObject(JObject j)
+        public Server ParseJObject(in JObject j)
         {
             return j.ToObject<Socks5>();
         }
@@ -30,15 +30,18 @@ namespace Netch.Servers.Socks5
             new Socks5Form().ShowDialog();
         }
 
-        public string GetShareLink(Server server)
+        public string GetShareLink(Server s)
         {
+            var server = (Socks5) s;
             // https://t.me/socks?server=1.1.1.1&port=443
-            return $"https://t.me/socks?server={server.Hostname}&port={server.Port}";
+            return $"https://t.me/socks?server={server.Hostname}&port={server.Port}" +
+                   $"{(!string.IsNullOrWhiteSpace(server.Username) ? $"&user={server.Username}" : "")}" +
+                   $"{(server.Auth() ? $"&user={server.Password}" : "")}";
         }
 
         public IServerController GetController()
         {
-            return null;
+            return new S5Controller();
         }
 
         public IEnumerable<Server> ParseUri(string text)
@@ -58,7 +61,7 @@ namespace Netch.Servers.Socks5
             var data = new Socks5
             {
                 Hostname = dict["server"],
-                Port = int.Parse(dict["port"])
+                Port = ushort.Parse(dict["port"])
             };
 
             if (dict.ContainsKey("user") && !string.IsNullOrWhiteSpace(dict["user"]))

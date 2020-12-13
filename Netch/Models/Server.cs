@@ -4,7 +4,7 @@ using Netch.Utils;
 
 namespace Netch.Models
 {
-    public class Server
+    public class Server:ICloneable
     {
         /// <summary>
         ///     备注
@@ -34,14 +34,12 @@ namespace Netch.Models
         /// <summary>
         ///     端口
         /// </summary>
-        public int Port;
+        public ushort Port;
 
         /// <summary>
         ///     延迟
         /// </summary>
         public int Delay = -1;
-
-        public bool IsSocks5() => Type == "Socks5";
 
         /// <summary>
         ///		获取备注
@@ -49,14 +47,17 @@ namespace Netch.Models
         /// <returns>备注</returns>
         public override string ToString()
         {
-            if (string.IsNullOrWhiteSpace(Remark))
-            {
-                Remark = $"{Hostname}:{Port}";
-            }
+            var remark = string.IsNullOrWhiteSpace(Remark) ? $"{Hostname}:{Port}" : Remark;
 
-            Group = Group.Equals("None") || Group.Equals("") ? "NONE" : Group;
+            if (Group.Equals("None") || Group.Equals(""))
+                Group = "NONE";
 
-            return $"[{ServerHelper.GetUtilByTypeName(Type)?.ShortName ?? "WTF"}][{Group}] {Remark}";
+            return $"[{ServerHelper.GetUtilByTypeName(Type)?.ShortName ?? "WTF"}][{Group}] {remark}";
+        }
+
+        public object Clone()
+        {
+            return MemberwiseClone();
         }
 
         /// <summary>
@@ -99,6 +100,14 @@ namespace Netch.Models
             {
                 return Delay = -4;
             }
+        }
+    }
+
+    public static class ServerExtension
+    {
+        public static string AutoResolveHostname(this Server server)
+        {
+            return Global.Settings.ResolveServerHostname ? DNS.Lookup(server.Hostname).ToString() : server.Hostname;
         }
     }
 }

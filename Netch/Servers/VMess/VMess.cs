@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Netch.Models;
 
@@ -64,12 +65,12 @@ namespace Netch.Servers.VMess
         /// <summary>
         ///		TLS 底层传输安全
         /// </summary>
-        public bool TLSSecure { get; set; } = false;
+        public string TLSSecureType { get; set; } = VMessGlobal.TLSSecure[0];
 
         /// <summary>
         ///		Mux 多路复用
         /// </summary>
-        public bool UseMux { get; set; } = true;
+        public bool? UseMux { get; set; } = true;
     }
 
     public class VMessGlobal
@@ -113,6 +114,15 @@ namespace Netch.Servers.VMess
             "wechat-video",
             "dtls",
             "wireguard"
+        };
+
+        /// <summary>
+        ///		TLS 安全类型
+        /// </summary>
+        public static readonly List<string> TLSSecure = new List<string>
+        {
+            "",
+            "tls"
         };
     }
 }

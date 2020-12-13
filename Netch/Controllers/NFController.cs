@@ -1,9 +1,12 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.ServiceProcess;
 using System.Threading.Tasks;
 using Netch.Models;
+using Netch.Servers.Socks5;
 using Netch.Utils;
 using nfapinet;
 
@@ -11,8 +14,6 @@ namespace Netch.Controllers
 {
     public class NFController : IModeController
     {
-        public bool TestNatRequired { get; } = true;
-
         private static readonly ServiceController NFService = new ServiceController("netfilter2");
 
         private static readonly string BinDriver = string.Empty;
@@ -45,56 +46,180 @@ namespace Netch.Controllers
             BinDriver = "bin\\" + fileName;
         }
 
-        public bool Start(Server s, Mode mode)
+        public bool Start(in Mode mode)
         {
-            Logging.Info("内置驱动版本: " + Utils.Utils.GetFileVersion(BinDriver));
-            if (Utils.Utils.GetFileVersion(SystemDriver) != Utils.Utils.GetFileVersion(BinDriver))
-            {
-                if (File.Exists(SystemDriver))
-                {
-                    Logging.Info("系统驱动版本: " + Utils.Utils.GetFileVersion(SystemDriver));
-                    Logging.Info("更新驱动");
-                    UninstallDriver();
-                }
+            if (!CheckDriver())
+                return false;
 
-                if (!InstallDriver())
-                    return false;
+            #region aio_dial
+
+            aio_dial((int) NameList.TYPE_FILTERLOOPBACK, "false");
+            aio_dial((int) NameList.TYPE_FILTERTCP, "true");
+            aio_dial((int) NameList.TYPE_FILTERUDP, "true");
+            aio_dial((int) NameList.TYPE_TCPLISN, Global.Settings.RedirectorTCPPort.ToString());
+
+            SetServer(MainController.ServerController, PortType.Both);
+
+            if (!CheckRule(mode.FullRule, out var list))
+            {
+                MessageBoxX.Show($"\"{string.Join("", list.Select(s => s + "\n"))}\" does not conform to C++ regular expression syntax");
+                return false;
             }
 
-            aio_dial((int) NameList.TYPE_CLRNAME, "");
-            foreach (var rule in mode.Rule)
-            {
-                aio_dial((int) NameList.TYPE_ADDNAME, rule);
-            }
+            SetName(mode);
 
-            aio_dial((int) NameList.TYPE_ADDNAME, "NTT.exe");
-
-            if (s.IsSocks5())
-            {
-                var result = DNS.Lookup(s.Hostname);
-                if (result == null)
-                {
-                    Logging.Info("无法解析服务器 IP 地址");
-                    return false;
-                }
-
-                aio_dial((int) NameList.TYPE_TCPHOST, $"{result}:{s.Port}");
-                aio_dial((int) NameList.TYPE_UDPHOST, $"{result}:{s.Port}");
-            }
-            else
-            {
-                aio_dial((int) NameList.TYPE_TCPHOST, $"127.0.0.1:{Global.Settings.Socks5LocalPort}");
-                aio_dial((int) NameList.TYPE_UDPHOST, $"127.0.0.1:{Global.Settings.Socks5LocalPort}");
-            }
+            #endregion
 
             if (Global.Settings.ModifySystemDNS)
             {
                 // 备份并替换系统 DNS
                 _sysDns = DNS.OutboundDNS;
-                DNS.OutboundDNS = "1.1.1.1,8.8.8.8";
+                if (string.IsNullOrWhiteSpace(Global.Settings.ModifiedDNS))
+                    Global.Settings.ModifiedDNS = "1.1.1.1,8.8.8.8";
+                DNS.OutboundDNS = Global.Settings.ModifiedDNS;
             }
 
             return aio_init();
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="rules"></param>
+        /// <param name="incompatibleRule"></param>
+        /// <returns>No Problem true</returns>
+        public static bool CheckRule(IEnumerable<string> rules, out IEnumerable<string> incompatibleRule)
+        {
+            incompatibleRule = rules.Where(r => !CheckCppRegex(r, false));
+            aio_dial((int) NameList.TYPE_CLRNAME, "");
+            return !incompatibleRule.Any();
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="r"></param>
+        /// <param name="clear"></param>
+        /// <returns>No Problem true</returns>
+        public static bool CheckCppRegex(string r, bool clear = true)
+        {
+            try
+            {
+                if (r.StartsWith("!"))
+                    return aio_dial((int) NameList.TYPE_ADDNAME, r.Substring(1));
+                return aio_dial((int) NameList.TYPE_ADDNAME, r);
+            }
+            finally
+            {
+                if (clear)
+                    aio_dial((int) NameList.TYPE_CLRNAME, "");
+            }
+        }
+
+        private static bool CheckDriver()
+        {
+            var binFileVersion = Utils.Utils.GetFileVersion(BinDriver);
+            var systemFileVersion = Utils.Utils.GetFileVersion(SystemDriver);
+
+            Logging.Info("内置驱动版本: " + binFileVersion);
+            Logging.Info("系统驱动版本: " + systemFileVersion);
+
+            if (!File.Exists(BinDriver))
+            {
+                Logging.Warning("内置驱动不存在");
+                if (File.Exists(SystemDriver))
+                {
+                    Logging.Warning("使用系统驱动");
+                    return true;
+                }
+
+                Logging.Error("未安装驱动");
+                return false;
+            }
+
+            if (!File.Exists(SystemDriver))
+            {
+                return InstallDriver();
+            }
+
+            var updateFlag = false;
+
+            if (Version.TryParse(binFileVersion, out var binResult) && Version.TryParse(systemFileVersion, out var systemResult))
+            {
+                if (binResult.CompareTo(systemResult) > 0)
+                {
+                    // Bin greater than Installed
+                    updateFlag = true;
+                }
+                else
+                {
+                    // Installed greater than Bin
+                    if (systemResult.Major != binResult.Major)
+                    {
+                        // API breaking changes
+                        updateFlag = true;
+                    }
+                }
+            }
+            else
+            {
+                if (!systemFileVersion.Equals(binFileVersion))
+                {
+                    updateFlag = true;
+                }
+            }
+
+            if (!updateFlag) return true;
+
+            Logging.Info("更新驱动");
+            UninstallDriver();
+            return InstallDriver();
+        }
+
+        private void SetServer(in IServerController controller, in PortType portType)
+        {
+            if (portType == PortType.Both)
+            {
+                SetServer(controller, PortType.TCP);
+                SetServer(controller, PortType.UDP);
+                return;
+            }
+
+            var offset = portType == PortType.UDP ? UdpNameListOffset : 0;
+
+            aio_dial((int) NameList.TYPE_TCPTYPE + offset, "Socks5");
+
+            if (controller.Server is Socks5 socks5)
+            {
+                aio_dial((int) NameList.TYPE_TCPHOST + offset, $"{socks5.AutoResolveHostname()}:{socks5.Port}");
+                aio_dial((int) NameList.TYPE_TCPUSER + offset, socks5.Username ?? string.Empty);
+                aio_dial((int) NameList.TYPE_TCPPASS + offset, socks5.Password ?? string.Empty);
+            }
+            else
+            {
+                aio_dial((int) NameList.TYPE_TCPHOST + offset, $"127.0.0.1:{controller.Socks5LocalPort()}");
+                aio_dial((int) NameList.TYPE_TCPUSER + offset, string.Empty);
+                aio_dial((int) NameList.TYPE_TCPPASS + offset, string.Empty);
+            }
+
+            aio_dial((int) NameList.TYPE_TCPMETH + offset, string.Empty);
+        }
+
+        private void SetName(Mode mode)
+        {
+            aio_dial((int) NameList.TYPE_CLRNAME, "");
+            foreach (var rule in mode.FullRule)
+            {
+                if (rule.StartsWith("!"))
+                {
+                    aio_dial((int) NameList.TYPE_BYPNAME, rule.Substring(1));
+                    continue;
+                }
+
+                aio_dial((int) NameList.TYPE_ADDNAME, rule);
+            }
+
+            aio_dial((int) NameList.TYPE_ADDNAME, @"NTT\.exe");
         }
 
         public void Stop()
@@ -111,20 +236,44 @@ namespace Netch.Controllers
 
         #region NativeMethods
 
-        [DllImport("Redirector.bin", CallingConvention = CallingConvention.Cdecl)]
-        public static extern bool aio_dial(int name, [MarshalAs(UnmanagedType.LPWStr)] string value);
+        private const int UdpNameListOffset = (int) NameList.TYPE_UDPTYPE - (int) NameList.TYPE_TCPTYPE;
 
         [DllImport("Redirector.bin", CallingConvention = CallingConvention.Cdecl)]
-        public static extern bool aio_init();
+        private static extern bool aio_dial(int name, [MarshalAs(UnmanagedType.LPWStr)] string value);
 
         [DllImport("Redirector.bin", CallingConvention = CallingConvention.Cdecl)]
-        public static extern bool aio_free();
+        private static extern bool aio_init();
 
         [DllImport("Redirector.bin", CallingConvention = CallingConvention.Cdecl)]
-        public static extern ulong aio_getUP();
+        private static extern bool aio_free();
 
         [DllImport("Redirector.bin", CallingConvention = CallingConvention.Cdecl)]
-        public static extern ulong aio_getDL();
+        private static extern ulong aio_getUP();
+
+        [DllImport("Redirector.bin", CallingConvention = CallingConvention.Cdecl)]
+        private static extern ulong aio_getDL();
+
+
+        public enum NameList : int
+        {
+            TYPE_FILTERLOOPBACK,
+            TYPE_FILTERTCP,
+            TYPE_FILTERUDP,
+            TYPE_TCPLISN,
+            TYPE_TCPTYPE,
+            TYPE_TCPHOST,
+            TYPE_TCPUSER,
+            TYPE_TCPPASS,
+            TYPE_TCPMETH,
+            TYPE_UDPTYPE,
+            TYPE_UDPHOST,
+            TYPE_UDPUSER,
+            TYPE_UDPPASS,
+            TYPE_UDPMETH,
+            TYPE_ADDNAME,
+            TYPE_BYPNAME,
+            TYPE_CLRNAME
+        }
 
         #endregion
 

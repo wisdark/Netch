@@ -11,17 +11,19 @@ namespace Netch.Servers.ShadowsocksR
 
         public override string Name { get; protected set; } = "ShadowsocksR";
 
-        public int? Socks5LocalPort { get; set; }
+        public Server Server { get; set; }
+        public ushort? Socks5LocalPort { get; set; }
         public string LocalAddress { get; set; }
 
-        public bool Start(Server s, Mode mode)
+        public bool Start(in Server s, in Mode mode)
         {
+            Server = s;
             var server = (ShadowsocksR) s;
 
             #region Argument
 
             var argument = new StringBuilder();
-            argument.Append($"-s {DNS.Lookup(server.Hostname)} -p {server.Port} -k \"{server.Password}\" -m {server.EncryptMethod} -t 120");
+            argument.Append($"-s {server.AutoResolveHostname()} -p {server.Port} -k \"{server.Password}\" -m {server.EncryptMethod} -t 120");
             if (!string.IsNullOrEmpty(server.Protocol))
             {
                 argument.Append($" -O {server.Protocol}");
@@ -34,7 +36,7 @@ namespace Netch.Servers.ShadowsocksR
                 if (!string.IsNullOrEmpty(server.OBFSParam)) argument.Append($" -g \"{server.OBFSParam}\"");
             }
 
-            argument.Append($" -b {LocalAddress ?? Global.Settings.LocalAddress} -l {Socks5LocalPort ?? Global.Settings.Socks5LocalPort} -u");
+            argument.Append($" -b {this.LocalAddress()} -l {this.Socks5LocalPort()} -u");
             if (mode.BypassChina) argument.Append(" --acl default.acl");
 
             #endregion

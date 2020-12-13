@@ -28,13 +28,13 @@ namespace Netch.Models
         /// </summary>
         string[] UriScheme { get; }
 
-        Server ParseJObject(JObject j);
+        Server ParseJObject(in JObject j);
 
         public void Edit(Server s);
 
         public void Create();
 
-        string GetShareLink(Server server);
+        string GetShareLink(Server s);
 
         public abstract IServerController GetController();
 

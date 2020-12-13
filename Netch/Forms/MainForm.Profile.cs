@@ -15,12 +15,8 @@ namespace Netch.Forms
 
     partial class MainForm
     {
-        /// init at <see cref="MainForm_Load"/> 
-        private int _sizeHeight;
-
-        private int _profileConfigurationHeight;
-        private int _profileGroupboxHeight;
         private int _configurationGroupBoxHeight;
+        private int _profileConfigurationHeight;
 
         private void InitProfile()
         {
@@ -41,7 +37,6 @@ namespace Netch.Forms
                 ProfileGroupBox.Visible = false;
 
                 ConfigurationGroupBox.Size = new Size(ConfigurationGroupBox.Size.Width, _configurationGroupBoxHeight - _profileConfigurationHeight);
-                Size = new Size(Size.Width, _sizeHeight - (_profileConfigurationHeight + _profileGroupboxHeight));
             }
             else
             {
@@ -75,18 +70,17 @@ namespace Netch.Forms
                     ProfileTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 1));
                 }
 
-                if (Size.Height == _sizeHeight) return;
                 configLayoutPanel.RowStyles[2].SizeType = SizeType.AutoSize;
                 ProfileGroupBox.Visible = true;
                 ConfigurationGroupBox.Size = new Size(ConfigurationGroupBox.Size.Width, _configurationGroupBoxHeight);
-                Size = new Size(Size.Width, _sizeHeight);
             }
         }
 
         private void LoadProfile(int index)
         {
             var p = Global.Settings.Profiles[index];
-            ProfileNameText.Text = p.ModeRemark;
+            ProfileNameText.Text = p.ProfileName;
+            ModeComboBox.ResetCompletionList();
 
             if (p.IsDummy)
                 throw new Exception("Profile not found.");
@@ -166,9 +160,6 @@ namespace Netch.Forms
                 ProfileButtons[index].Text = i18N.Translate("None");
                 return;
             }
-
-            // Reset Mode ComboBox Items
-            ModeComboBox.Text = string.Empty;
 
             try
             {

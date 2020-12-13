@@ -17,7 +17,7 @@ namespace Netch.Servers.Trojan
         public string ShortName { get; } = "TR";
         public string[] UriScheme { get; } = {"trojan"};
 
-        public Server ParseJObject(JObject j)
+        public Server ParseJObject(in JObject j)
         {
             return j.ToObject<Trojan>();
         }
@@ -32,10 +32,10 @@ namespace Netch.Servers.Trojan
             new TrojanForm().ShowDialog();
         }
 
-        public string GetShareLink(Server server)
+        public string GetShareLink(Server s)
         {
-            // TODO
-            return "";
+            var server = (Trojan) s;
+            return $"trojan://{HttpUtility.UrlEncode(server.Password)}@{server.Hostname}:{server.Port}#{server.Remark}";
         }
 
         public IServerController GetController()
@@ -85,7 +85,7 @@ namespace Netch.Servers.Trojan
 
                 data.Password = match.Groups["psk"].Value;
                 data.Hostname = match.Groups["server"].Value;
-                data.Port = int.Parse(match.Groups["port"].Value);
+                data.Port = ushort.Parse(match.Groups["port"].Value);
 
                 return new[] {data};
             }

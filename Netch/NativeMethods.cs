@@ -2,18 +2,6 @@
 
 namespace Netch
 {
-    public enum NameList : int
-    {
-        TYPE_FILTERLOOPBACK,
-        TYPE_FILTERTCP,
-        TYPE_FILTERUDP,
-        TYPE_TCPHOST,
-        TYPE_UDPHOST,
-        TYPE_ADDNAME,
-        TYPE_BYPNAME,
-        TYPE_CLRNAME
-    }
-
     public static class NativeMethods
     {
         /// <summary>
@@ -66,5 +54,11 @@ namespace Netch
 
         [DllImport("dnsapi", EntryPoint = "DnsFlushResolverCache")]
         public static extern uint FlushDNSResolverCache();
+
+        [DllImport("kernel32.dll")]
+        public static extern bool AllocConsole();
+
+        [DllImport("kernel32.dll")]
+        public static extern bool AttachConsole(int dwProcessId);
     }
 }

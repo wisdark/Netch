@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using Netch.Servers.Shadowsocks;
 using Netch.Servers.Shadowsocks.Models;
+using Netch.Servers.VMess;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Server = Netch.Models.Server;
@@ -149,7 +150,7 @@ namespace Netch.Utils
             return list;
         }
 
-        private static IEnumerable<Server> ParseUri(string text)
+        private static IEnumerable<Server> ParseUri(in string text)
         {
             var list = new List<Server>();
 
@@ -233,7 +234,8 @@ namespace Netch.Utils
 
         public static string GetNetchLink(Server s)
         {
-            return "Netch://" + URLSafeBase64Encode(JsonConvert.SerializeObject(s));
+            var server = (Server) s.Clone();
+            return "Netch://" + URLSafeBase64Encode(JsonConvert.SerializeObject(server, new JsonSerializerSettings {NullValueHandling = NullValueHandling.Ignore}));
         }
     }
 }

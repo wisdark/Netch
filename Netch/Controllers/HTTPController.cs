@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -11,8 +11,6 @@ namespace Netch.Controllers
 {
     public class HTTPController : IModeController
     {
-        public bool TestNatRequired { get; } = false;
-
         public const string IEProxyExceptions = "localhost;127.*;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;172.26.*;172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;192.168.*";
 
         public PrivoxyController pPrivoxyController = new PrivoxyController();
@@ -25,25 +23,17 @@ namespace Netch.Controllers
         /// <summary>
         ///     启动
         /// </summary>
-        /// <param name="s">服务器</param>
         /// <param name="mode">模式</param>
         /// <returns>是否启动成功</returns>
-        public bool Start(Server s, Mode mode)
+        public bool Start(in Mode mode)
         {
             RecordPrevious();
 
             try
             {
-                if (s.IsSocks5())
+                if (pPrivoxyController.Start(MainController.ServerController.Server, mode))
                 {
-                    var server = (Socks5) s;
-                    if (!string.IsNullOrWhiteSpace(server.Username) && !string.IsNullOrWhiteSpace(server.Password)) return false;
-
-                    pPrivoxyController.Start(s, mode);
-                }
-                else
-                {
-                    pPrivoxyController.Start(s, mode);
+                    Global.Job.AddProcess(pPrivoxyController.Instance);
                 }
 
                 if (mode.Type == 3) NativeMethods.SetGlobal($"127.0.0.1:{Global.Settings.HTTPLocalPort}", IEProxyExceptions);

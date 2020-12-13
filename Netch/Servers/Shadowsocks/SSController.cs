@@ -11,23 +11,26 @@ namespace Netch.Servers.Shadowsocks
         public override string Name { get; protected set; } = "Shadowsocks";
         public override string MainFile { get; protected set; } = "Shadowsocks.exe";
 
-        public int? Socks5LocalPort { get; set; }
+        public Server Server { get; set; }
+        public ushort? Socks5LocalPort { get; set; }
         public string LocalAddress { get; set; }
 
-        public bool Start(Server s, Mode mode)
-        {
-            bool DllFlag()
-            {
-                return Global.Settings.BootShadowsocksFromDLL && (mode.Type == 0 || mode.Type == 1 || mode.Type == 2);
-            }
+        private Mode _savedMode;
+        public bool DllFlag;
 
+        public bool Start(in Server s, in Mode mode)
+        {
+            _savedMode = mode;
+            Server = s;
             var server = (Shadowsocks) s;
+            DllFlag = Global.Settings.BootShadowsocksFromDLL && (_savedMode.Type == 0 || _savedMode.Type == 1 || _savedMode.Type == 2);
+
             //从DLL启动Shaowsocks
-            if (DllFlag())
+            if (DllFlag)
             {
                 State = State.Starting;
-                var client = Encoding.UTF8.GetBytes($"{LocalAddress}:{Socks5LocalPort}");
-                var remote = Encoding.UTF8.GetBytes($"{DNS.Lookup(server.Hostname)}:{server.Port}");
+                var client = Encoding.UTF8.GetBytes($"{this.LocalAddress()}:{this.Socks5LocalPort()}");
+                var remote = Encoding.UTF8.GetBytes($"{server.AutoResolveHostname()}:{server.Port}");
                 var passwd = Encoding.UTF8.GetBytes($"{server.Password}");
                 var method = Encoding.UTF8.GetBytes($"{server.EncryptMethod}");
                 if (!ShadowsocksDLL.Info(client, remote, passwd, method))
@@ -55,10 +58,10 @@ namespace Netch.Servers.Shadowsocks
 
             var argument = new StringBuilder();
             argument.Append(
-                $"-s {DNS.Lookup(server.Hostname)} " +
+                $"-s {server.AutoResolveHostname()} " +
                 $"-p {server.Port} " +
-                $"-b {LocalAddress ?? Global.Settings.LocalAddress} " +
-                $"-l {Socks5LocalPort ?? Global.Settings.Socks5LocalPort} " +
+                $"-b {this.LocalAddress()} " +
+                $"-l {this.Socks5LocalPort()} " +
                 $"-m {server.EncryptMethod} " +
                 $"-k \"{server.Password}\" " +
                 "-u ");
@@ -75,12 +78,12 @@ namespace Netch.Servers.Shadowsocks
 
         public override void Stop()
         {
-            if (Instance == null)
+            if (DllFlag)
                 ShadowsocksDLL.Stop();
             else
                 StopInstance();
+            _savedMode = null;
         }
-
 
         private class ShadowsocksDLL
         {
