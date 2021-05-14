@@ -1,48 +1,60 @@
-﻿using System;
+﻿using Netch.Utils;
+using System;
+using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using Netch.Utils;
 
 namespace Netch.Models
 {
-    public class Server:ICloneable
+    public class Server : ICloneable
     {
         /// <summary>
-        ///     备注
+        ///     延迟
         /// </summary>
-        public string Remark;
+        [JsonIgnore]
+        public int Delay { get; private set; } = -1;
 
         /// <summary>
         ///     组
         /// </summary>
-        public string Group = "None";
-
-        /// <summary>
-        ///     代理类型
-        /// </summary>
-        public string Type;
-
-        /// <summary>
-        ///     倍率
-        /// </summary>
-        public double Rate = 1.0;
+        public string Group { get; set; } = "None";
 
         /// <summary>
         ///     地址
         /// </summary>
-        public string Hostname;
+        public string Hostname { get; set; } = string.Empty;
 
         /// <summary>
         ///     端口
         /// </summary>
-        public ushort Port;
+        public ushort Port { get; set; }
 
         /// <summary>
-        ///     延迟
+        ///     倍率
         /// </summary>
-        public int Delay = -1;
+        public double Rate { get; } = 1.0;
 
         /// <summary>
-        ///		获取备注
+        ///     备注
+        /// </summary>
+        public string Remark { get; set; } = "";
+
+        /// <summary>
+        ///     代理类型
+        /// </summary>
+        public virtual string Type { get; } = string.Empty;
+
+        [JsonExtensionData]
+        // ReSharper disable once CollectionNeverUpdated.Global
+        public Dictionary<string, object> ExtensionData { get; set; } = new();
+
+        public object Clone()
+        {
+            return MemberwiseClone();
+        }
+
+        /// <summary>
+        ///     获取备注
         /// </summary>
         /// <returns>备注</returns>
         public override string ToString()
@@ -52,43 +64,46 @@ namespace Netch.Models
             if (Group.Equals("None") || Group.Equals(""))
                 Group = "NONE";
 
-            return $"[{ServerHelper.GetUtilByTypeName(Type)?.ShortName ?? "WTF"}][{Group}] {remark}";
-        }
+            string shortName;
+            if (Type == string.Empty)
+            {
+                shortName = "WTF";
+            }
+            else
+            {
+                shortName = ServerHelper.GetUtilByTypeName(Type).ShortName;
+            }
 
-        public object Clone()
-        {
-            return MemberwiseClone();
+            return $"[{shortName}][{Group}] {remark}";
         }
 
         /// <summary>
-        ///		测试延迟
+        ///     测试延迟
         /// </summary>
         /// <returns>延迟</returns>
         public int Test()
         {
             try
             {
-                var destination = DNS.Lookup(Hostname);
+                var destination = DnsUtils.Lookup(Hostname);
                 if (destination == null)
-                {
                     return Delay = -2;
-                }
 
                 var list = new Task<int>[3];
                 for (var i = 0; i < 3; i++)
-                {
                     list[i] = Task.Run(async () =>
                     {
                         try
                         {
-                            return await Utils.Utils.TCPingAsync(destination, Port);
+                            return Global.Settings.ServerTCPing
+                                ? await Utils.Utils.TCPingAsync(destination, Port)
+                                : Utils.Utils.ICMPing(destination, Port);
                         }
                         catch (Exception)
                         {
                             return -4;
                         }
                     });
-                }
 
                 Task.WaitAll(list[0], list[1], list[2]);
 
@@ -107,7 +122,20 @@ namespace Netch.Models
     {
         public static string AutoResolveHostname(this Server server)
         {
-            return Global.Settings.ResolveServerHostname ? DNS.Lookup(server.Hostname).ToString() : server.Hostname;
+            return Global.Settings.ResolveServerHostname ? DnsUtils.Lookup(server.Hostname)!.ToString() : server.Hostname;
+        }
+
+        public static bool Valid(this Server server)
+        {
+            try
+            {
+                ServerHelper.GetTypeByTypeName(server.Type);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 }

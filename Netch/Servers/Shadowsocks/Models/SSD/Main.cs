@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿#nullable disable
+using System.Collections.Generic;
 
 namespace Netch.Servers.Shadowsocks.Models.SSD
 {
@@ -8,11 +9,6 @@ namespace Netch.Servers.Shadowsocks.Models.SSD
         ///     机场名
         /// </summary>
         public string airport;
-
-        /// <summary>
-        ///     端口
-        /// </summary>
-        public ushort port;
 
         /// <summary>
         ///     加密方式
@@ -33,6 +29,11 @@ namespace Netch.Servers.Shadowsocks.Models.SSD
         ///     插件参数
         /// </summary>
         public string plugin_options;
+
+        /// <summary>
+        ///     端口
+        /// </summary>
+        public ushort port;
 
         /// <summary>
         ///     服务器数组

@@ -1,26 +1,28 @@
+using System;
 using System.Collections.Generic;
-using Netch.Controllers;
+using Netch.Interfaces;
 using Netch.Models;
-using Newtonsoft.Json.Linq;
+using Netch.Servers.V2ray;
 
 namespace Netch.Servers.VLESS
 {
     public class VLESSUtil : IServerUtil
     {
         public ushort Priority { get; } = 2;
-        public string TypeName { get; } = "VLESS";
-        public string FullName { get; } = "VLESS";
-        public string ShortName { get; } = "VL";
-        public string[] UriScheme { get; } = { };
 
-        public Server ParseJObject(in JObject j)
-        {
-            return j.ToObject<VLESS>();
-        }
+        public string TypeName { get; } = "VLESS";
+
+        public string FullName { get; } = "VLESS";
+
+        public string ShortName { get; } = "VL";
+
+        public string[] UriScheme { get; } = { "vless" };
+
+        public Type ServerType { get; } = typeof(VLESS);
 
         public void Edit(Server s)
         {
-            new VLESSForm.VLESSForm((VLESS) s).ShowDialog();
+            new VLESSForm.VLESSForm((VLESS)s).ShowDialog();
         }
 
         public void Create()
@@ -28,25 +30,23 @@ namespace Netch.Servers.VLESS
             new VLESSForm.VLESSForm().ShowDialog();
         }
 
-        public string GetShareLink(Server server)
+        public string GetShareLink(Server s)
         {
-            // TODO
-            return "";
+            return V2rayUtils.GetVShareLink(s, "vless");
         }
 
         public IServerController GetController()
         {
-            return new VLESSController();
+            return new V2rayController();
         }
 
         public IEnumerable<Server> ParseUri(string text)
         {
-            throw new System.NotImplementedException();
+            return V2rayUtils.ParseVUri(text);
         }
 
         public bool CheckServer(Server s)
         {
-            // TODO
             return true;
         }
     }

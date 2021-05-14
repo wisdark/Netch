@@ -1,72 +1,57 @@
+<p align="center"><img src="https://github.com/NetchX/Netch/blob/master/Netch/Resources/Netch.png?raw=true" width="128" /></p>
+
+<div align="center">
+
 # Netch
-[![Group](https://img.shields.io/badge/Telegram-Group-green)](https://t.me/Netch_Discuss_Group)
-[![Channel](https://img.shields.io/badge/Telegram-Channel-blue)](https://t.me/Netch)
-[![Platform](https://img.shields.io/badge/platform-windows-orange.svg)](https://github.com/NetchX/Netch)
-[![Version](https://img.shields.io/github/v/release/NetchX/Netch)](https://github.com/NetchX/Netch/releases)
-[![Downloads](https://img.shields.io/github/downloads/NetchX/Netch/total.svg)](https://github.com/NetchX/Netch/releases)
-[![Netch CI](https://github.com/NetchX/Netch/workflows/Netch%20CI/badge.svg)](https://github.com/NetchX/Netch/actions)
-[![Website](https://img.shields.io/website?url=https%3A%2F%2Fnetch.org)](https://netch.org/)
-[![License](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
+A simple proxy client like SSTap
 
-[中文说明](/docs/README.zh-CN.md)
+[![](https://img.shields.io/badge/telegram-group-green?style=flat-square)](https://t.me/netch_group)
+[![](https://img.shields.io/badge/telegram-channel-blue?style=flat-square)](https://t.me/netch_channel)
+[![](https://img.shields.io/github/downloads/NetchX/Netch/total.svg?style=flat-square)](https://github.com/NetchX/Netch/releases)
+[![](https://img.shields.io/github/v/release/NetchX/Netch?style=flat-square)](https://github.com/NetchX/Netch/releases)
+</div>
 
-[常见问题](https://netch.org/#/docs/zh-CN/faq)
+## Features
+Some features may not be implemented in version 1.0
 
-Game network accelerator
+### Modes
+- ProcessMode - Use Netfilter driver to intercept process traffic
+- ShareMode - Share your network based on WinPcap / Npcap
+- TapMode - Use TAP-Windows driver to create virtual adapter
+- TunMode - Use WinTUN driver to create virtual adapter
+- WebMode - Web proxy mode
+- WmpMode - Proxy forwarding (eg. OBS Streaming)
 
-## TOC
-- [Netch](#netch)
-	- [TOC](#toc)
-	- [Description](#description)
-    - [Sponsor](#sponsor)
-	- [Donate](#donate)
-	- [Screenshots](#screenshots)
-	- [Requirements](#requirements)
+### Protocols
+- [Socks5](https://www.wikiwand.com/en/SOCKS)
+- [Shadowsocks](https://github.com/shadowsocks/shadowsocks-libev)
+- [ShadowsocksR](https://github.com/shadowsocksrr/shadowsocksr-libev)
+- [Trojan](https://trojan-gfw.github.io/trojan/)
+- [VMess](https://github.com/v2fly/v2ray-core)
+- [VLess](https://github.com/xtls/xray-core)
 
-## Description
-Netch is an open source game network accelerator. Unlike SSTap, which needs to add rules to function as a blacklist proxy, Netch is more similar to SocksCap64, which can scan the game directory to get their process names specifically and forward their network traffic through the proxy server
-
-Currently supports the following protocols
-- Socks5
-- Shadowsocks
-- ShadowsocksR
-- Trojan
-- VMess
-- VLess
-
-As well, Netch avoid the restricted NAT problem caused by SSTap. You can use an NATTypeTester to test out what your NAT type is. When using SSTap to speed up some P2P gaming connections or the game is required for that kind of open NAT type, you may experience some bad situations such as unable to join the game
+### Others
+- UDP NAT FullCone (May limited by your server)
+- .NET 5.0
 
 ## Sponsor
-<a href="https://www.jetbrains.com/?from=Netch"><img src=".github/jetbrains-variant-4.svg" alt="JetBrains" width="200"/></a>
+<a href="https://www.jetbrains.com/?from=Netch"><img src="jetbrains.svg" alt="JetBrains" width="200"/></a>
 
-- [RabbitHosts](https://rabbithosts.com/cart.php)
-- [ManSora](https://www.mansora.co/cart.php)
-- [NyanCat](https://nyancat.info/register)
+- [NeroCloud](https://nerocloud.io)
 
 ## Donate
 - XMR *48ju3ELNZEa6wwPBMexCJ9G218BGY2XwhH6B6bmkFuJ3QgM4hPw2Pra35jPtuBZSc7SLNWeBpiWJZWjQeMAiLnTx2tH2Efx*
+- ETH *0x23dac0a93bcd71fec7a95833ad030338f167f185*
 
-## Screenshots
-![](docs/screenshots/main.png)
+## Credit
+- [WinTUN](https://www.wintun.net)
+- [NetFilter](https://netfiltersdk.com)
+- [aioCloud](https://github.com/aiocloud)
+- [Shadowsocks](https://github.com/shadowsocks/shadowsocks-libev)
+- [ShadowsocksR](https://github.com/shadowsocksrr/shadowsocksr-libev)
+- [Trojan](https://github.com/trojan-gfw/trojan)
+- [V2Ray](https://github.com/v2fly/v2ray-core)
+- [XRay](https://github.com/xtls/xray-core)
 
-## Requirements
-- Microsoft Visual C++ Runtime
-- [.NET Framework 4.8](https://dotnet.microsoft.com/download/dotnet-framework/net48)
-
-## Quote
-- [core](https://github.com/aiocloud/core)
-- [aiodns](https://github.com/aiocloud/aiodns)
-- [Redirector](https://github.com/aiocloud/Redirector)
-- [go-tun2socks](https://github.com/eycorsican/go-tun2socks)
-- [shadowsocks-libev](https://github.com/shadowsocks/shadowsocks-libev)
-- [shadowsocksr-libev](https://github.com/shadowsocksrr/shadowsocksr-libev)
-- [v2ray-core](https://github.com/v2ray/v2ray-core)
-- [trojan](https://github.com/trojan-gfw/trojan)
-- [ACL4SSR](https://github.com/ACL4SSR/ACL4SSR)
-- [dnsmasq-china-list](https://github.com/felixonmars/dnsmasq-china-list)
-- [tap-windows6](https://github.com/OpenVPN/tap-windows6)
-- [Privoxy](https://www.privoxy.org/)
-- [NatTypeTester](https://github.com/HMBSbige/NatTypeTester)
-- [NetFilter SDK](https://netfiltersdk.com/)
-
-[![Stargazers over time](https://starchart.cc/NetchX/Netch.svg)](https://starchart.cc/NetchX/Netch)     
+## Stars
+[![](https://starchart.cc/NetchX/Netch.svg)](https://starchart.cc/NetchX/Netch)

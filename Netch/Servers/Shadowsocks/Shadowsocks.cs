@@ -1,10 +1,12 @@
-﻿using System.Collections.Generic;
-using Netch.Models;
+﻿using Netch.Models;
+using System.Collections.Generic;
 
 namespace Netch.Servers.Shadowsocks
 {
     public class Shadowsocks : Server
     {
+        public override string Type { get; } = "SS";
+
         /// <summary>
         ///     加密方式
         /// </summary>
@@ -13,21 +15,21 @@ namespace Netch.Servers.Shadowsocks
         /// <summary>
         ///     密码
         /// </summary>
-        public string Password { get; set; }
+        public string Password { get; set; } = string.Empty;
 
         /// <summary>
         ///     插件
         /// </summary>
-        public string Plugin { get; set; }
+        public string? Plugin { get; set; }
 
         /// <summary>
         ///     插件参数
         /// </summary>
-        public string PluginOption { get; set; }
+        public string? PluginOption { get; set; }
 
-        public Shadowsocks()
+        public bool HasPlugin()
         {
-            Type = "SS";
+            return !string.IsNullOrWhiteSpace(Plugin) && !string.IsNullOrWhiteSpace(PluginOption);
         }
     }
 
@@ -36,7 +38,7 @@ namespace Netch.Servers.Shadowsocks
         /// <summary>
         ///     SS 加密列表
         /// </summary>
-        public static readonly List<string> EncryptMethods = new List<string>
+        public static readonly List<string> EncryptMethods = new()
         {
             "rc4-md5",
             "aes-128-gcm",

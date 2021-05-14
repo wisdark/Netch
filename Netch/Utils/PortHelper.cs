@@ -3,30 +3,43 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Net.NetworkInformation;
+using Netch.Models;
+using static Vanara.PInvoke.IpHlpApi;
+using static Vanara.PInvoke.Ws2_32;
 
 namespace Netch.Utils
 {
     public static class PortHelper
     {
-        private static readonly List<ushort[]> TCPExcludedRanges = new List<ushort[]>();
-        private static readonly List<ushort[]> UDPExcludedRanges = new List<ushort[]>();
+        private static readonly List<NumberRange> TCPReservedRanges = new();
+        private static readonly List<NumberRange> UDPReservedRanges = new();
+        private static readonly IPGlobalProperties NetInfo = IPGlobalProperties.GetIPGlobalProperties();
 
         static PortHelper()
         {
             try
             {
-                GetExcludedPortRange(PortType.TCP, ref TCPExcludedRanges);
-                GetExcludedPortRange(PortType.UDP, ref UDPExcludedRanges);
+                GetReservedPortRange(PortType.TCP, ref TCPReservedRanges);
+                GetReservedPortRange(PortType.UDP, ref UDPReservedRanges);
             }
             catch (Exception e)
             {
-                Logging.Error("获取保留端口失败: " + e);
+                Global.Logger.Error("获取保留端口失败: " + e);
             }
         }
 
-        private static void GetExcludedPortRange(PortType portType, ref List<ushort[]> targetList)
+        public static IEnumerable<Process> GetProcessByUsedTcpPort(ushort port)
         {
-            var lines = new List<string>();
+            if (port == 0)
+                throw new ArgumentOutOfRangeException();
+
+            var row = GetTcpTable2().Where(r => ntohs((ushort)r.dwLocalPort) == port).Where(r => r.dwOwningPid is not (0 or 4));
+
+            return row.Select(r => Process.GetProcessById((int)r.dwOwningPid));
+        }
+
+        private static void GetReservedPortRange(PortType portType, ref List<NumberRange> targetList)
+        {
             var process = new Process
             {
                 StartInfo = new ProcessStartInfo
@@ -38,57 +51,21 @@ namespace Netch.Utils
                     CreateNoWindow = true
                 }
             };
-            process.OutputDataReceived += (s, e) =>
-            {
-                if (e.Data != null) lines.Add(e.Data);
-            };
+
             process.Start();
-            process.BeginOutputReadLine();
-            process.WaitForExit();
+            var output = process.StandardOutput.ReadToEnd();
 
-            var splitLine = false;
-            foreach (var line in lines)
+            foreach (var line in output.SplitRemoveEmptyEntriesAndTrimEntries('\n'))
             {
-                if (!splitLine)
-                {
-                    if (line.StartsWith("-"))
-                    {
-                        splitLine = true;
-                    }
-                }
-                else
-                {
-                    if (line == string.Empty)
-                        break;
+                var value = line.Trim().SplitRemoveEmptyEntries(' ');
+                if (value.Length != 2)
+                    continue;
 
-                    var value = line.Trim().Split(' ').Where(s => s != string.Empty);
+                if (!ushort.TryParse(value[0], out var start) || !ushort.TryParse(value[1], out var end))
+                    continue;
 
-                    ushort port = 0;
-                    var _ = (from s1 in value
-                        where ushort.TryParse(s1, out port)
-                        select port).ToArray();
-
-                    targetList.Add(_);
-                }
+                targetList.Add(new NumberRange(start, end));
             }
-        }
-
-        /// <summary>
-        ///     检查端口是否是保留端口
-        /// </summary>
-        /// <param name="port">端口</param>
-        /// <param name="type">端口类型</param>
-        /// <returns>是否是保留端口</returns>
-        /// <exception cref="ArgumentOutOfRangeException"></exception>
-        private static bool IsPortExcluded(ushort port, PortType type)
-        {
-            return type switch
-            {
-                PortType.TCP => TCPExcludedRanges.Any(range => range[0] <= port && port <= range[1]),
-                PortType.UDP => UDPExcludedRanges.Any(range => range[0] <= port && port <= range[1]),
-                PortType.Both => IsPortExcluded(port, PortType.TCP) || IsPortExcluded(port, PortType.UDP),
-                _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
-            };
         }
 
         /// <summary>
@@ -97,39 +74,89 @@ namespace Netch.Utils
         /// <param name="port">端口</param>
         /// <param name="type">检查端口类型</param>
         /// <returns>是否被占用</returns>
-        public static bool PortInUse(ushort port, PortType type = PortType.Both)
+        public static void CheckPort(ushort port, PortType type = PortType.Both)
         {
-            var netInfo = IPGlobalProperties.GetIPGlobalProperties();
-            var isTcpUsed = type != PortType.UDP &&
-                            (IsPortExcluded(port, PortType.TCP) ||
-                             netInfo.GetActiveTcpListeners().Any(ipEndPoint => ipEndPoint.Port == port));
-            var isUdpUsed = type != PortType.TCP &&
-                            (IsPortExcluded(port, PortType.UDP) ||
-                             netInfo.GetActiveUdpListeners().Any(ipEndPoint => ipEndPoint.Port == port));
-            var isPortExcluded = !UsingPorts.Contains(port);
-
-            return isPortExcluded && (isTcpUsed || isUdpUsed);
+            switch (type)
+            {
+                case PortType.Both:
+                    CheckPort(port, PortType.TCP);
+                    CheckPort(port, PortType.UDP);
+                    break;
+                default:
+                    CheckPortInUse(port, type);
+                    CheckPortReserved(port, type);
+                    break;
+            }
         }
 
-        public static ushort GetAvailablePort()
+        private static void CheckPortInUse(ushort port, PortType type)
+        {
+            switch (type)
+            {
+                case PortType.Both:
+                    CheckPortInUse(port, PortType.TCP);
+                    CheckPortInUse(port, PortType.UDP);
+                    break;
+                case PortType.TCP:
+                    if (NetInfo.GetActiveTcpListeners().Any(ipEndPoint => ipEndPoint.Port == port))
+                        throw new PortInUseException();
+
+                    break;
+                case PortType.UDP:
+                    if (NetInfo.GetActiveUdpListeners().Any(ipEndPoint => ipEndPoint.Port == port))
+                        throw new PortInUseException();
+
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(type), type, null);
+            }
+        }
+
+        /// <summary>
+        ///     检查端口是否是保留端口
+        /// </summary>
+        private static void CheckPortReserved(ushort port, PortType type)
+        {
+            switch (type)
+            {
+                case PortType.Both:
+                    CheckPortReserved(port, PortType.TCP);
+                    CheckPortReserved(port, PortType.UDP);
+                    return;
+                case PortType.TCP:
+                    if (TCPReservedRanges.Any(range => range.InRange(port)))
+                        throw new PortReservedException();
+
+                    break;
+                case PortType.UDP:
+                    if (UDPReservedRanges.Any(range => range.InRange(port)))
+                        throw new PortReservedException();
+
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(type), type, null);
+            }
+        }
+
+        public static ushort GetAvailablePort(PortType portType = PortType.Both)
         {
             var random = new Random();
             for (ushort i = 0; i < 55535; i++)
             {
-                var p = (ushort) random.Next(10000, 65535);
-                if (!PortInUse(p))
+                var p = (ushort)random.Next(10000, 65535);
+                try
                 {
+                    CheckPort(p, portType);
                     return p;
+                }
+                catch (Exception)
+                {
+                    // ignored
                 }
             }
 
-            throw new Exception("Cant Generate Available Port");
+            throw new Exception();
         }
-
-        /// <summary>
-        ///     记录Netch使用的端口
-        /// </summary>
-        public static readonly List<ushort> UsingPorts = new List<ushort>();
     }
 
     /// <summary>
@@ -144,5 +171,23 @@ namespace Netch.Utils
 
     public class PortInUseException : Exception
     {
+        public PortInUseException(string message) : base(message)
+        {
+        }
+
+        public PortInUseException()
+        {
+        }
+    }
+
+    public class PortReservedException : Exception
+    {
+        public PortReservedException(string message) : base(message)
+        {
+        }
+
+        public PortReservedException()
+        {
+        }
     }
 }

@@ -1,7 +1,9 @@
-﻿using System.IO;
-using Netch.Models;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+﻿using Netch.Models;
+using System;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Netch.Utils
 {
@@ -10,46 +12,59 @@ namespace Netch.Utils
         /// <summary>
         ///     数据目录
         /// </summary>
-        public const string DATA_DIR = "data";
+        public static string DataDirectoryFullName => Path.Combine(Global.NetchDir, "data");
 
-        /// <summary>
-        ///     设置
-        /// </summary>
-        public static readonly string SETTINGS_JSON = $"{DATA_DIR}\\settings.json";
+        public static string SettingFileFullName => $"{DataDirectoryFullName}\\settings.json";
+
+        private static readonly JsonSerializerOptions JsonSerializerOptions = Global.NewDefaultJsonSerializerOptions;
+
+        static Configuration()
+        {
+            JsonSerializerOptions.Converters.Add(new ServerConverterWithTypeDiscriminator());
+            JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+        }
 
         /// <summary>
         ///     加载配置
         /// </summary>
         public static void Load()
         {
-            if (Directory.Exists(DATA_DIR) && File.Exists(SETTINGS_JSON))
+            if (File.Exists(SettingFileFullName))
             {
                 try
                 {
-                    var settingJObject = (JObject) JsonConvert.DeserializeObject(File.ReadAllText(SETTINGS_JSON));
-                    Global.Settings = settingJObject?.ToObject<Setting>() ?? new Setting();
-                    Global.Settings.Server.Clear();
+                    using var fileStream = File.OpenRead(SettingFileFullName);
+                    var settings = JsonSerializer.DeserializeAsync<Setting>(fileStream, JsonSerializerOptions).Result!;
 
-                    if (settingJObject?["Server"] != null)
-                        foreach (JObject server in settingJObject["Server"])
-                        {
-                            var serverResult = ServerHelper.ParseJObject(server);
-                            if (serverResult != null)
-                                Global.Settings.Server.Add(serverResult);
-                        }
+                    CheckSetting(settings);
+
+                    Global.Settings = settings;
                 }
-                catch (JsonException)
+                catch (Exception e)
                 {
+                    Global.Logger.Error(e.ToString());
+                    Global.Logger.ShowLog();
+                    Environment.Exit(-1);
+                    Global.Settings = null!;
                 }
             }
             else
             {
-                // 弹出提示
-                i18N.Load("System");
-
-                // 创建 data 文件夹并保存默认设置
+                // 保存默认设置
                 Save();
             }
+        }
+
+        private static void CheckSetting(Setting settings)
+        {
+            settings.Profiles.RemoveAll(p => p.ServerRemark == string.Empty || p.ModeRemark == string.Empty);
+
+            if (settings.Profiles.Any(p => settings.Profiles.Any(p1 => p1 != p && p1.Index == p.Index)))
+                for (var i = 0; i < settings.Profiles.Count; i++)
+                    settings.Profiles[i].Index = i;
+
+            settings.AioDNS.ChinaDNS = Utils.HostAppendPort(settings.AioDNS.ChinaDNS);
+            settings.AioDNS.OtherDNS = Utils.HostAppendPort(settings.AioDNS.OtherDNS);
         }
 
         /// <summary>
@@ -57,20 +72,11 @@ namespace Netch.Utils
         /// </summary>
         public static void Save()
         {
-            if (!Directory.Exists(DATA_DIR))
-            {
-                Directory.CreateDirectory(DATA_DIR);
-            }
+            if (!Directory.Exists(DataDirectoryFullName))
+                Directory.CreateDirectory(DataDirectoryFullName);
 
-            File.WriteAllText(SETTINGS_JSON,
-                JsonConvert.SerializeObject(
-                    Global.Settings,
-                    Formatting.Indented,
-                    new JsonSerializerSettings
-                    {
-                        NullValueHandling = NullValueHandling.Ignore
-                    }
-                ));
+            using var fileStream = File.Create(SettingFileFullName);
+            JsonSerializer.SerializeAsync(fileStream, Global.Settings, JsonSerializerOptions).Wait();
         }
     }
 }

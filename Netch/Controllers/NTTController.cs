@@ -1,43 +1,93 @@
 ﻿using System;
-using System.Diagnostics;
+using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
+using Netch.Interfaces;
 using Netch.Utils;
 
 namespace Netch.Controllers
 {
     public class NTTController : Guard, IController
     {
-        private string _localEnd;
-        private string _publicEnd;
-        private string _result;
-        private string _bindingTest;
-        public override string Name { get; protected set; } = "NTT";
         public override string MainFile { get; protected set; } = "NTT.exe";
+
+        public override string Name { get; } = "NTT";
+
+        public override void Stop()
+        {
+            StopInstance();
+        }
 
         /// <summary>
         ///     启动 NatTypeTester
         /// </summary>
         /// <returns></returns>
-        public (string, string, string) Start()
+        public async Task<(string?, string?, string?)> Start()
         {
-            _result = _localEnd = _publicEnd = null;
+            string? localEnd = null, publicEnd = null, result = null, bindingTest = null;
 
             try
             {
                 InitInstance($" {Global.Settings.STUN_Server} {Global.Settings.STUN_Server_Port}");
-                Instance.OutputDataReceived += OnOutputDataReceived;
-                Instance.ErrorDataReceived += OnOutputDataReceived;
-                Instance.Start();
-                Instance.BeginOutputReadLine();
-                Instance.BeginErrorReadLine();
-                Instance.WaitForExit();
-                if (_bindingTest == "Fail")
-                    _result = "UdpBlocked";
-                return (_result, _localEnd, _publicEnd);
+                Instance!.Start();
+
+                var output = await Instance.StandardOutput.ReadToEndAsync();
+                var error = await Instance.StandardError.ReadToEndAsync();
+
+                try
+                {
+                    File.WriteAllText(Path.Combine(Global.NetchDir, $"logging\\{Name}.log"), $"{output}\r\n{error}");
+                }
+                catch (Exception e)
+                {
+                    Global.Logger.Warning($"写入 {Name} 日志错误：\n" + e.Message);
+                }
+
+                if (output.IsNullOrWhiteSpace())
+                    if (!error.IsNullOrWhiteSpace())
+                    {
+                        error = error.Trim();
+                        var errorFirst = error.Substring(0, error.IndexOf('\n')).Trim();
+                        return (errorFirst.SplitTrimEntries(':').Last(), null, null);
+                    }
+
+                foreach (var line in output.Split('\n'))
+                {
+                    var str = line.SplitTrimEntries(':');
+                    if (str.Length < 2)
+                        continue;
+
+                    var key = str[0];
+                    var value = str[1];
+                    switch (key)
+                    {
+                        case "Other address is":
+                        case "Nat mapping behavior":
+                        case "Nat filtering behavior":
+                            break;
+                        case "Binding test":
+                            bindingTest = value;
+                            break;
+                        case "Local address":
+                            localEnd = value;
+                            break;
+                        case "Mapped address":
+                            publicEnd = value;
+                            break;
+                        case "result":
+                            result = value;
+                            break;
+                    }
+                }
+
+                if (bindingTest == "Fail")
+                    result = "Fail";
+
+                return (result, localEnd, publicEnd);
             }
             catch (Exception e)
             {
-                Logging.Error($"{Name} 控制器出错:\n" + e);
+                Global.Logger.Error($"{Name} 控制器出错:\n" + e);
                 try
                 {
                     Stop();
@@ -49,46 +99,6 @@ namespace Netch.Controllers
 
                 return (null, null, null);
             }
-        }
-
-
-        private new void OnOutputDataReceived(object sender, DataReceivedEventArgs e)
-        {
-            if (string.IsNullOrEmpty(e.Data)) return;
-            Logging.Info($"[NTT] {e.Data}");
-
-            var str = e.Data.Split(':').Select(s => s.Trim()).ToArray();
-            if (str.Length < 2)
-                return;
-            var key = str[0];
-            var value = str[1];
-            switch (key)
-            {
-                case "Other address is":
-                case "Nat mapping behavior":
-                case "Nat filtering behavior":
-                    break;
-                case "Binding test":
-                    _bindingTest = value;
-                    break;
-                case "Local address":
-                    _localEnd = value;
-                    break;
-                case "Mapped address":
-                    _publicEnd = value;
-                    break;
-                case "result":
-                    _result = value;
-                    break;
-                default:
-                    _result = str.Last();
-                    break;
-            }
-        }
-
-        public override void Stop()
-        {
-            StopInstance();
         }
     }
 }

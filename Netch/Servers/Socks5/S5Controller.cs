@@ -1,42 +1,17 @@
-using System.IO;
-using Netch.Controllers;
 using Netch.Models;
-using Netch.Servers.VMess.Utils;
+using Netch.Servers.V2ray;
 
 namespace Netch.Servers.Socks5
 {
-    public class S5Controller : Guard, IServerController
+    public class S5Controller : V2rayController
     {
-        public override string Name { get; protected set; } = "Socks5";
-        public override string MainFile { get; protected set; } = "v2ray.exe";
+        public override string Name { get; } = "Socks5";
 
-        public bool Start(in Server s, in Mode mode)
+        public override void Start(in Server s, in Mode mode)
         {
-            Server = s;
-            var server = (Socks5) s;
-            if (server.Auth() && !mode.SupportSocks5Auth)
-            {
-                File.WriteAllText("data\\last.json", V2rayConfigUtils.GenerateClientConfig(s, mode));
-                if (StartInstanceAuto("-config ..\\data\\last.json"))
-                {
-                    return true;
-                }
-
-                return false;
-            }
-
-            return true;
+            var server = (Socks5)s;
+            if (server.Auth())
+                base.Start(s, mode);
         }
-
-        public override void Stop()
-        {
-            if (Instance != null)
-                StopInstance();
-        }
-
-        public Server Server { get; set; }
-        public ushort? Socks5LocalPort { get; set; }
-
-        public string LocalAddress { get; set; }
     }
 }

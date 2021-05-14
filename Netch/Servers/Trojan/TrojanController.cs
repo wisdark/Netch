@@ -1,33 +1,31 @@
 ﻿using System.Collections.Generic;
 using System.IO;
+using System.Text.Json;
 using Netch.Controllers;
+using Netch.Interfaces;
 using Netch.Models;
 using Netch.Servers.Trojan.Models;
-using Netch.Utils;
-using Newtonsoft.Json;
 
 namespace Netch.Servers.Trojan
 {
     public class TrojanController : Guard, IServerController
     {
-        public TrojanController()
-        {
-            StartedKeywords.Add("started");
-            StoppedKeywords.Add("exiting");
-        }
-
         public override string MainFile { get; protected set; } = "Trojan.exe";
-        public override string Name { get; protected set; } = "Trojan";
-        public Server Server { get; set; }
+
+        protected override IEnumerable<string> StartedKeywords { get; set; } = new[] { "started" };
+
+        protected override IEnumerable<string> StoppedKeywords { get; set; } = new[] { "exiting" };
+
+        public override string Name { get; } = "Trojan";
+
         public ushort? Socks5LocalPort { get; set; }
-        public string LocalAddress { get; set; }
 
+        public string? LocalAddress { get; set; }
 
-        public bool Start(in Server s, in Mode mode)
+        public void Start(in Server s, in Mode mode)
         {
-            Server = s;
-            var server = (Trojan) s;
-            File.WriteAllText("data\\last.json", JsonConvert.SerializeObject(new TrojanConfig
+            var server = (Trojan)s;
+            var trojanConfig = new TrojanConfig
             {
                 local_addr = this.LocalAddress(),
                 local_port = this.Socks5LocalPort(),
@@ -37,9 +35,14 @@ namespace Netch.Servers.Trojan
                 {
                     server.Password
                 }
-            }));
+            };
 
-            return StartInstanceAuto("-c ..\\data\\last.json");
+            if (!string.IsNullOrWhiteSpace(server.Host))
+                trojanConfig.ssl.sni = server.Host;
+
+            File.WriteAllBytes("data\\last.json", JsonSerializer.SerializeToUtf8Bytes(trojanConfig, Global.NewDefaultJsonSerializerOptions));
+
+            StartInstanceAuto("-c ..\\data\\last.json");
         }
 
         public override void Stop()

@@ -1,60 +1,61 @@
 ﻿using System;
-using System.Text;
+using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace Netch.Models.GitHubRelease
 {
     [Serializable]
-    public struct SuffixVersion : ICloneable, IComparable, IComparable<SuffixVersion>, IEquatable<SuffixVersion>
+    public struct SuffixVersion : IComparable, IComparable<SuffixVersion>
     {
-        public int Major { get; }
-        public int Minor { get; }
-        public int Patch { get; }
-        public string PreRelease { get; }
-        public int Build { get; }
+        public Version Version { get; }
 
-        public SuffixVersion(int major, int minor, int patch, string preRelease, int build)
+        public string? Suffix { get; }
+
+        public int SuffixNum { get; }
+
+        private SuffixVersion(Version version)
         {
-            Major = major;
-            Minor = minor;
-            Patch = patch;
-            PreRelease = preRelease;
-            Build = build;
+            Version = version;
+            Suffix = null;
+            SuffixNum = 0;
         }
 
-        public SuffixVersion(Version version, string preRelease, int build)
+        private SuffixVersion(Version version, string suffix, int suffixNum)
         {
-            Major = version.Major;
-            Minor = version.Minor;
-            Patch = version.Build;
-            PreRelease = preRelease;
-            Build = build;
+            Version = version;
+            Suffix = suffix;
+            SuffixNum = suffixNum;
         }
 
-        public static SuffixVersion Parse(string input)
+        public static SuffixVersion Parse(string? value)
         {
-            var splitStr = input.Split('-');
-            var dotNetVersion = Version.Parse(splitStr[0]);
-            var preRelease = new StringBuilder();
-            var build = 0;
+            if (value == null)
+                throw new ArgumentNullException(nameof(value));
 
-            if (splitStr.Length > 1)
-                foreach (var c in splitStr[1])
+            var strings = value.Split('-');
+
+            var version = Version.Parse(strings[0]);
+            var suffix = strings.ElementAtOrDefault(1)?.Trim();
+            switch (suffix)
+            {
+                case null:
+                    return new SuffixVersion(version);
+                case "":
+                    throw new Exception("suffix WhiteSpace");
+                default:
                 {
-                    if (int.TryParse(c.ToString(), out var n))
-                    {
-                        build = build * 10 + n;
-                    }
-                    else
-                    {
-                        preRelease.Append(c);
-                    }
-                }
+                    var match = Regex.Match(suffix, @"(?<suffix>\D+)(?<num>\d+)");
+                    if (!match.Success)
+                        throw new Exception();
 
-            return new SuffixVersion(dotNetVersion, preRelease.ToString(), build);
+                    return new SuffixVersion(version, match.Groups["suffix"].Value, int.Parse(match.Groups["num"].Value));
+                }
+            }
         }
 
-        public static bool TryParse(string input, out SuffixVersion result)
+        public static bool TryParse(string? input, out SuffixVersion result)
         {
+            result = default;
             try
             {
                 result = Parse(input);
@@ -62,76 +63,48 @@ namespace Netch.Models.GitHubRelease
             }
             catch (Exception)
             {
-                result = default;
                 return false;
             }
         }
 
-
-        public object Clone() => new SuffixVersion(Major, Major, Patch, PreRelease, Build);
-
-        public int CompareTo(object obj)
+        public int CompareTo(object? obj)
         {
-            if (obj is SuffixVersion version)
-                return CompareTo(version);
-            return -1;
+            if (obj is not SuffixVersion version)
+                throw new ArgumentOutOfRangeException();
+
+            return CompareTo(version);
         }
 
         /// <summary>
-        /// 
         /// </summary>
         /// <param name="other"></param>
         /// <returns>
-        /// greater than 0 newer
+        ///     greater than 0 newer
         /// </returns>
         public int CompareTo(SuffixVersion other)
         {
-            var majorComparison = Major.CompareTo(other.Major);
-            if (majorComparison != 0)
-                return majorComparison;
-            var minorComparison = Minor.CompareTo(other.Minor);
-            if (minorComparison != 0)
-                return minorComparison;
-            var patchComparison = Patch.CompareTo(other.Patch);
-            if (patchComparison != 0)
-                return patchComparison;
-            if (PreRelease == string.Empty)
-                return other.PreRelease == string.Empty ? 0 : 1;
-            if (other.PreRelease == string.Empty)
-                return -1;
-            var suffixComparison = string.Compare(PreRelease, other.PreRelease, StringComparison.Ordinal);
+            var versionComparison = Version.CompareTo(other.Version);
+            if (versionComparison != 0)
+                return versionComparison;
+
+            var suffixExistComparison = (Suffix == null ? 1 : 0) - (other.Suffix == null ? 1 : 0);
+            if (suffixExistComparison != 0)
+                return suffixExistComparison;
+
+            var suffixComparison = string.Compare(Suffix, other.Suffix, StringComparison.OrdinalIgnoreCase);
             if (suffixComparison != 0)
                 return suffixComparison;
-            return Build.CompareTo(other.Build);
-        }
 
-        public bool Equals(SuffixVersion other)
-        {
-            return Major == other.Major && Minor == other.Minor && Patch == other.Patch && PreRelease == other.PreRelease && Build == other.Build;
-        }
-
-        public override bool Equals(object obj)
-        {
-            return obj is SuffixVersion other && Equals(other);
-        }
-
-
-        public override int GetHashCode()
-        {
-            unchecked
-            {
-                var hashCode = Major;
-                hashCode = (hashCode * 397) ^ Minor;
-                hashCode = (hashCode * 397) ^ Patch;
-                hashCode = (hashCode * 397) ^ (PreRelease != null ? PreRelease.GetHashCode() : 0);
-                hashCode = (hashCode * 397) ^ Build;
-                return hashCode;
-            }
+            return SuffixNum - other.SuffixNum;
         }
 
         public override string ToString()
         {
-            return $"{Major}.{Minor}.{Patch}{(string.IsNullOrEmpty(PreRelease) ? "" : "-")}{PreRelease}{(Build == 0 ? "" : Build.ToString())}";
+            var s = Version.ToString();
+            if (Suffix != null)
+                s += $"-{Suffix}{SuffixNum}";
+
+            return s;
         }
     }
 }

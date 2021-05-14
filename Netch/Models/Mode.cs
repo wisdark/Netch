@@ -1,174 +1,147 @@
-﻿using System.Collections.Generic;
+﻿using Netch.Utils;
+using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
-using Netch.Utils;
+using Netch.Enums;
 
 namespace Netch.Models
 {
     public class Mode
     {
         /// <summary>
-        ///		备注
+        /// 
         /// </summary>
-        public string Remark;
+        /// <param name="fullName">Mode File FullPath</param>
+        /// <exception cref="FormatException"></exception>
+        /// <exception cref="NotSupportedException"></exception>
+        public Mode(string? fullName)
+        {
+            FullName = fullName;
+            if (FullName == null || !File.Exists(FullName))
+                return;
+
+            (Remark, Type) = ReadHead(FullName);
+        }
+
+        public string? FullName { get; }
+
+        /// <summary>
+        ///     规则
+        /// </summary>
+        public List<string> Content => _content ??= ReadContent();
+
+        private List<string>? _content;
+
+        /// <summary>
+        ///     备注
+        /// </summary>
+        public string Remark { get; set; } = "";
+
+        public ModeType Type { get; set; } = ModeType.Process;
 
         /// <summary>
         ///     文件相对路径(必须是存在的文件)
         /// </summary>
-        public string RelativePath;
+        public string? RelativePath => FullName == null ? null : ModeHelper.GetRelativePath(FullName);
 
-        /// <summary>
-        ///		无后缀文件名
-        /// </summary>
-        public string FileName;
-
-        /// <summary>
-        ///     类型<para />
-        ///     0. Socks5 + 进程加速<para />
-        ///     1. Socks5 + TUN/TAP 规则内 IP CIDR 加速<para />
-        ///     2. Socks5 + TUN/TAP 全局，绕过规则内 IP CIDR<para />
-        ///     3. Socks5 + HTTP 代理（设置到系统代理）<para />
-        ///     4. Socks5 代理（不设置到系统代理）<para />
-        ///     5. Socks5 + HTTP 代理（不设置到系统代理）<para />
-        /// </summary>
-        public int Type = 0;
-
-        public bool SupportSocks5Auth => Type switch
+        public IEnumerable<string> GetRules()
         {
-            0 => true,
-            _ => false
-        };
-
-        public bool TestNatRequired => Type switch
-        {
-            0 => true,
-            1 => true,
-            2 => true,
-            _ => false
-        };
-
-        /// <summary>
-        ///    绕过中国（0. 不绕过 1. 绕过）
-        /// </summary>
-        public bool BypassChina = false;
-
-        /// <summary>
-        ///		规则
-        /// </summary>
-        public readonly List<string> Rule = new List<string>();
-
-        public List<string> FullRule
-        {
-            get
+            var result = new List<string>();
+            foreach (var s in Content)
             {
-                var result = new List<string>();
-                foreach (var s in Rule)
+                if (string.IsNullOrWhiteSpace(s))
+                    continue;
+
+                if (s.StartsWith("//"))
+                    continue;
+
+                const string include = "#include";
+                if (s.StartsWith(include))
                 {
-                    if (string.IsNullOrWhiteSpace(s))
-                        continue;
-                    if (s.StartsWith("//"))
-                        continue;
+                    var relativePath = new StringBuilder(s[include.Length..].Trim());
+                    relativePath.Replace("<", "").Replace(">", "");
+                    relativePath.Replace(".h", ".txt");
 
-                    if (s.StartsWith("#include"))
-                    {
-                        var relativePath = new StringBuilder(s.Substring(8).Trim());
-                        relativePath.Replace("<", "");
-                        relativePath.Replace(">", "");
-                        relativePath.Replace(".h", ".txt");
+                    var mode = Global.Modes.FirstOrDefault(m => m.RelativePath?.Equals(relativePath.ToString()) ?? false) ??
+                               throw new MessageException($"{relativePath} file included in {Remark} not found");
 
-                        var mode = Global.Modes.FirstOrDefault(m => m.RelativePath.Equals(relativePath.ToString()));
+                    if (mode == this)
+                        throw new MessageException("Can't self-reference");
 
-                        if (mode == null)
-                        {
-                            Logging.Warning($"{relativePath} file included in {Remark} not found");
-                        }
-                        else if (mode == this)
-                        {
-                            Logging.Warning("Can't self-reference");
-                        }
-                        else
-                        {
-                            if (mode.Type != Type)
-                            {
-                                Logging.Warning($"{mode.Remark}'s mode is not as same as {Remark}'s mode");
-                            }
-                            else
-                            {
-                                if (mode.Rule.Any(rule => rule.StartsWith("#include")))
-                                {
-                                    Logging.Warning("Cannot reference mode that reference other mode");
-                                }
-                                else
-                                {
-                                    result.AddRange(mode.FullRule);
-                                }
-                            }
-                        }
-                    }
-                    else
-                    {
-                        result.Add(s);
-                    }
+                    if (mode.Type != Type)
+                        throw new MessageException($"{mode.Remark}'s mode is not as same as {Remark}'s mode");
+
+                    if (mode.Content.Any(rule => rule.StartsWith(include)))
+                        throw new Exception("Cannot reference mode that reference other mode");
+
+                    result.AddRange(mode.GetRules());
                 }
-
-                return result;
+                else
+                {
+                    result.Add(s);
+                }
             }
+
+            return result;
         }
 
+        private static (string, ModeType) ReadHead(string fileName)
+        {
+            var text = File.ReadLines(fileName).First();
+            if (text.First() != '#')
+                throw new FormatException($"{fileName} head not found at Line 0");
+
+            var split = text[1..].SplitTrimEntries(',');
+
+            var typeNumber = int.TryParse(split.ElementAtOrDefault(1), out var type) ? type : 0;
+            if (!Enum.GetValues(typeof(ModeType)).Cast<int>().Contains(typeNumber))
+                throw new NotSupportedException($"Not support mode \"{typeNumber}\".");
+
+            return (split[0], (ModeType)typeNumber);
+        }
+
+        private List<string> ReadContent()
+        {
+            if (FullName == null || !File.Exists(FullName))
+                return new List<string>();
+
+            return File.ReadLines(FullName).Skip(1).ToList();
+        }
+
+        public void ResetContent()
+        {
+            _content = null;
+        }
+
+        public void WriteFile()
+        {
+            var dir = Path.GetDirectoryName(FullName)!;
+            if (!Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+
+            var content = $"# {Remark}, {(int)Type}{Constants.EOF}{string.Join(Constants.EOF, Content)}";
+            // 写入到模式文件里
+            File.WriteAllText(FullName!, content);
+        }
 
         /// <summary>
-        ///		获取备注
+        ///     获取备注
         /// </summary>
         /// <returns>备注</returns>
         public override string ToString()
         {
-            return $"[{Type + 1}] {i18N.Translate(Remark)}";
+            return $"[{(int)Type + 1}] {i18N.Translate(Remark)}";
         }
+    }
 
-        /// <summary>
-        ///		获取模式文件字符串
-        /// </summary>
-        /// <returns>模式文件字符串</returns>
-        public string ToFileString()
+    public static class ModeExtension
+    {
+        /// 是否会转发 UDP
+        public static bool TestNatRequired(this Mode mode)
         {
-            StringBuilder fileString = new StringBuilder();
-
-            switch (Type)
-            {
-                case 0:
-                    // 进程模式
-                    fileString.Append($"# {Remark}");
-                    break;
-                case 1:
-                    // TUN/TAP 规则内 IP CIDR，无 Bypass China 设置
-                    fileString.Append($"# {Remark}, {Type}, 0");
-                    break;
-                default:
-                    fileString.Append($"# {Remark}, {Type}, {(BypassChina ? 1 : 0)}");
-                    break;
-            }
-
-            if (Rule.Any())
-            {
-                fileString.Append(Global.EOF);
-                fileString.Append(string.Join(Global.EOF, Rule));
-            }
-
-            return fileString.ToString();
-        }
-
-        public string TypeToString()
-        {
-            return Type switch
-            {
-                0 => "Process",
-                1 => "TUNTAP",
-                2 => "TUNTAP",
-                3 => "SYSTEM",
-                4 => "S5",
-                5 => "S5+HTTP",
-                _ => "ERROR",
-            };
+            return mode.Type is ModeType.Process or ModeType.BypassRuleIPs;
         }
     }
 }

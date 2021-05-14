@@ -1,45 +1,33 @@
-﻿using System.IO;
-using System.Runtime.InteropServices;
-using System.Text;
+﻿using System;
+using System.IO;
+using Netch.Interfaces;
+using static Netch.Interops.AioDNS;
 
 namespace Netch.Controllers
 {
     public class DNSController : IController
     {
-
         public string Name { get; } = "DNS Service";
+
+        public void Stop()
+        {
+            Free();
+        }
 
         /// <summary>
         ///     启动DNS服务
         /// </summary>
         /// <returns></returns>
-        public bool Start()
+        public void Start()
         {
-            if (!aiodns_dial(Encoding.UTF8.GetBytes(Path.GetFullPath(Global.Settings.AioDNS.RulePath)),
-                Encoding.UTF8.GetBytes($"{Global.Settings.AioDNS.ChinaDNS}:53"),
-                Encoding.UTF8.GetBytes($"{Global.Settings.AioDNS.OtherDNS}:53"))
-            )
-                return false;
-            return
-                aiodns_init();
+            Dial(NameList.TYPE_REST, "");
+            Dial(NameList.TYPE_ADDR, $"{Global.Settings.LocalAddress}:{Global.Settings.AioDNS.ListenPort}");
+            Dial(NameList.TYPE_LIST, Path.GetFullPath(Global.Settings.AioDNS.RulePath));
+            Dial(NameList.TYPE_CDNS, $"{Global.Settings.AioDNS.ChinaDNS}");
+            Dial(NameList.TYPE_ODNS, $"{Global.Settings.AioDNS.OtherDNS}");
+
+            if (!Init())
+                throw new Exception("AioDNS start failed");
         }
-
-        public void Stop()
-        {
-            aiodns_free();
-        }
-
-        #region NativeMethods
-
-        [DllImport("aiodns.bin", CallingConvention = CallingConvention.Cdecl)]
-        public static extern bool aiodns_dial(byte[] chinacon, byte[] chinadns, byte[] otherdns);
-
-        [DllImport("aiodns.bin", CallingConvention = CallingConvention.Cdecl)]
-        public static extern bool aiodns_init();
-
-        [DllImport("aiodns.bin", CallingConvention = CallingConvention.Cdecl)]
-        public static extern void aiodns_free();
-
-        #endregion
     }
 }
